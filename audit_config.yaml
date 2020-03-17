@@ -45,6 +45,13 @@ S3_ACCESS_BLOCK_ALL_ACCESS_TYPES:
   is_global: True
   group: S3
 
+S3_BUCKET_ENCRYPTION_OFF:
+  title: S3 Bucket does not use server side encryption
+  description: This control prevents S3 buckets from being created without encryption.
+  severity: Medium
+  is_global: True
+  group: S3
+
 GUARDDUTY_OFF:
   title: GuardDuty is not enabled
   description: GuardDuty is an AWS threat detection service that detects compromised access keys, EC2 instances, and more. It should be enabled in all regions.

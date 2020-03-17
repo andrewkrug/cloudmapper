@@ -192,6 +192,27 @@ def audit_s3_block_policy(findings, region):
             )
 
 
+def audit_s3_bucket_encryption(findings, region):
+    buckets_json = query_aws(region.account, "s3-list-buckets", region)
+    buckets = pyjq.all(".Buckets[].Name", buckets_json)
+    for bucket in buckets:
+        bucket_encryption_json = get_parameter_file(
+            region, "s3", "get-bucket-encryption", bucket
+        )
+        if bucket_encryption_json is None:
+            findings.add(Finding(region, "S3_BUCKET_ENCRYPTION_OFF", bucket))
+        else:
+            conf = bucket_encryption_json["ServerSideEncryptionConfiguration"]
+            for rule in conf["Rules"]:
+                sse_default = rule.get("ApplyServerSideEncryptionByDefault")
+                if sse_default:
+                    sse_alg = sse_default.get("SSEAlgorithm")
+                    if sse_alg not in ["AES256"]:
+                        findings.add(
+                            Finding(region, "S3_BUCKET_ENCRYPTION_CUSTOM", bucket)
+                        )
+
+
 def audit_guardduty(findings, region):
     detector_list_json = query_aws(region.account, "guardduty-list-detectors", region)
     if not detector_list_json:
@@ -230,7 +251,9 @@ def audit_iam(findings, region):
         if flist.issue_id != "IAM_UNEXPECTED_ADMIN_PRINCIPAL":
             continue
 
-        services = make_list(flist.resource_details.get("Principal", {}).get("Service", ""))
+        services = make_list(
+            flist.resource_details.get("Principal", {}).get("Service", "")
+        )
         for service in services:
             if service in [
                 "config.amazonaws.com",
@@ -254,15 +277,16 @@ def audit_iam(findings, region):
 
                     already_recorded = False
                     for f in findings:
-                        if f.resource_id == fget.resource_id and f.issue_id == "IAM_UNEXPECTED_ADMIN_PRINCIPAL":
+                        if (
+                            f.resource_id == fget.resource_id
+                            and f.issue_id == "IAM_UNEXPECTED_ADMIN_PRINCIPAL"
+                        ):
                             already_recorded = True
                             break
 
                     if not already_recorded:
                         flist.issue_id = "IAM_UNEXPECTED_S3_EXFIL_PRINCIPAL"
                         findings.add(flist)
-
-                    
 
             # Don't record this multiple times if multiple services are listed
             break
@@ -1075,6 +1099,7 @@ def audit(accounts):
             try:
                 if region.name == "us-east-1":
                     audit_s3_buckets(findings, region)
+                    audit_s3_bucket_encryption(findings, region)
                     audit_cloudtrail(findings, region)
                     audit_iam(findings, region)
                     audit_password_policy(findings, region)
